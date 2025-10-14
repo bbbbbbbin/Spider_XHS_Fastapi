@@ -1,74 +1,181 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>小红书舆论监控</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = { theme: { extend: { colors: { brand: '#e94c33' } } } }
   </script>
   <style>
-    .highlight { background-color: #fffacd; font-weight: bold; }
-    .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
-    .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 800px; max-height: 80vh; overflow-y: auto; }
+    .highlight {
+      background-color: #fffacd;
+      font-weight: bold;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 50;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      overflow: auto;
+    }
+
+    .modal-content {
+      background-color: #fff;
+      margin: 30px auto;
+      padding: 24px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 800px;
+      max-height: 85vh;
+      overflow-y: auto;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      position: relative;
+    }
+
+    .spinner {
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #e94c33;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .media-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .media-grid img,
+    .media-grid video {
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+
+    .note-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .note-header img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-right: 12px;
+      object-fit: cover;
+    }
+
+    .note-stats {
+      display: flex;
+      gap: 16px;
+      margin-top: 16px;
+      color: #666;
+      font-size: 0.9em;
+    }
   </style>
 </head>
+
 <body class="bg-gray-50">
-  <div class="max-w-6xl mx-auto p-6">
-    <header class="mb-8 text-center">
-      <h1 class="text-3xl font-bold text-brand">小红书舆论监控看板</h1>
-      <p class="text-gray-600 mt-2">需提供有效用户 cookies 进行搜索，笔记详情可免登录查看</p>
+  <div class="max-w-6xl mx-auto p-4 md:p-6">
+    <!-- 标题 -->
+    <header class="mb-6 text-center">
+      <h1 class="text-2xl md:text-3xl font-bold text-brand">小红书舆论监控看板</h1>
+      <p class="text-gray-600 mt-2 text-sm md:text-base">需提供有效用户 cookies 进行搜索，笔记详情可免登录查看</p>
     </header>
 
     <!-- 搜索区 -->
     <div class="bg-white p-4 rounded-lg shadow mb-6">
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
-          <label class="block text-sm font-medium">关键词</label>
+          <label class="block text-sm font-medium text-gray-700">关键词</label>
           <input id="keyword" type="text" placeholder="如：赵露思" class="mt-1 p-2 border rounded w-full" value="赵露思">
         </div>
         <div>
-          <label class="block text-sm font-medium">数量 (1-50)</label>
+          <label class="block text-sm font-medium text-gray-700">数量 (1-50)</label>
           <input id="num" type="number" min="1" max="50" value="10" class="mt-1 p-2 border rounded w-full">
         </div>
-        <div>
-          <label class="block text-sm font-medium">排序</label>
-          <select id="sort" class="mt-1 p-2 border rounded w-full">
-            <option value="0">综合排序</option>
-            <option value="1">最新发布</option>
-            <option value="2">最多点赞</option>
-            <option value="3">最多评论</option>
-            <option value="4">最多收藏</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium">时间范围</label>
-          <select id="time" class="mt-1 p-2 border rounded w-full">
-            <option value="0">不限</option>
-            <option value="1">一天内</option>
-            <option value="2">一周内</option>
-            <option value="3">半年内</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium">笔记类型</label>
-          <select id="type" class="mt-1 p-2 border rounded w-full">
-            <option value="0">不限</option>
-            <option value="1">视频笔记</option>
-            <option value="2">图文笔记</option>
-          </select>
-        </div>
-        <div class="lg:col-span-2">
-          <label class="block text-sm font-medium">Cookies（必需）</label>
-          <input id="cookies" type="text" placeholder="请填写你的小红书 cookies" class="mt-1 p-2 border rounded w-full">
-        </div>
       </div>
-      <div class="mt-4 flex gap-2">
-        <button onclick="searchNotes()" class="bg-brand text-white px-4 py-2 rounded hover:bg-red-600">🔍 开始监控</button>
-        <button onclick="exportCSV()" class="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800">📤 导出 CSV</button>
+
+      <!-- 高级筛选折叠面板 -->
+      <details class="mb-4 border rounded p-3 bg-gray-50">
+        <summary class="cursor-pointer font-medium text-gray-700">高级筛选 ▼</summary>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+          <div>
+            <label class="block text-sm text-gray-600">排序</label>
+            <select id="sort" class="mt-1 p-2 border rounded w-full">
+              <option value="0">综合排序</option>
+              <option value="1">最新发布</option>
+              <option value="2">最多点赞</option>
+              <option value="3">最多评论</option>
+              <option value="4">最多收藏</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-600">时间范围</label>
+            <select id="time" class="mt-1 p-2 border rounded w-full">
+              <option value="0">不限</option>
+              <option value="1">一天内</option>
+              <option value="2">一周内</option>
+              <option value="3">半年内</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-600">笔记类型</label>
+            <select id="type" class="mt-1 p-2 border rounded w-full">
+              <option value="0">不限</option>
+              <option value="1">视频笔记</option>
+              <option value="2">图文笔记</option>
+            </select>
+          </div>
+        </div>
+      </details>
+
+      <div class="mb-3">
+        <label class="block text-sm font-medium text-gray-700">Cookies（必需）</label>
+        <input id="cookies" type="text" placeholder="请填写你的小红书 cookies" class="mt-1 p-2 border rounded w-full">
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button id="searchBtn" onclick="searchNotes()"
+          class="bg-brand text-white px-4 py-2 rounded hover:bg-red-600 flex items-center">
+          <span id="searchText">🔍 开始监控</span>
+          <span id="searchSpinner" class="ml-2 hidden">
+            <div class="spinner"></div>
+          </span>
+        </button>
+        <button onclick="exportCSV()" class="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800">📤 导出
+          CSV</button>
       </div>
     </div>
+
+    <!-- 结果摘要 -->
+    <div id="summary" class="text-sm text-gray-600 mb-4 hidden"></div>
 
     <!-- 结果区 -->
     <div id="results" class="space-y-4"></div>
@@ -77,14 +184,43 @@
   <!-- 笔记详情弹窗 -->
   <div id="noteModal" class="modal">
     <div class="modal-content">
-      <span onclick="closeModal()" class="float-right cursor-pointer text-gray-500 text-xl">&times;</span>
-      <h2 id="modalTitle" class="text-2xl font-bold mt-2"></h2>
-      <p id="modalDesc" class="mt-3 text-gray-800 whitespace-pre-wrap"></p>
-      <div id="modalImages" class="mt-4 grid grid-cols-2 gap-2"></div>
-      <div id="modalVideo" class="mt-4"></div>
-      <div class="mt-4 text-sm text-gray-600">
-        <p>👍 <span id="modalLikes"></span> | 💬 <span id="modalComments"></span> | 🔖 <span id="modalCollects"></span></p>
-        <p class="mt-1">📍 <span id="modalLocation"></span> | 🕒 <span id="modalTime"></span></p>
+      <span onclick="closeModal()" class="float-right cursor-pointer text-gray-500 text-xl font-bold">&times;</span>
+
+      <!-- 加载中 -->
+      <div id="modalLoading" class="text-center">
+        <div class="spinner"></div>
+        <p class="text-gray-600 mt-2">正在加载笔记详情...</p>
+      </div>
+
+      <!-- 错误提示（初始隐藏） -->
+      <div id="modalError" class="text-center text-red-500 mt-4 hidden">
+        <p>⚠️ 笔记详情加载失败</p>
+        <p class="text-sm mt-1" id="modalErrorMsg"></p>
+        <button onclick="retryLoadNote()" class="mt-3 text-blue-500 underline text-sm">🔄 重试</button>
+      </div>
+
+      <!-- 成功内容（初始隐藏） -->
+      <div id="modalContent" class="hidden">
+        <div class="note-header">
+          <img id="modalUserAvatar" src="" onerror="this.style.display='none'">
+          <div>
+            <div class="font-bold text-blue-600" id="modalUserName"></div>
+            <div class="text-sm text-gray-500" id="modalUserFans"></div>
+          </div>
+        </div>
+
+        <h2 id="modalTitle" class="text-xl font-bold break-words"></h2>
+        <p id="modalDesc" class="mt-3 text-gray-800 whitespace-pre-wrap leading-relaxed"></p>
+
+        <div id="modalMedia" class="mt-4"></div>
+
+        <div class="note-stats">
+          <span>👍 <span id="modalLikes"></span></span>
+          <span>💬 <span id="modalComments"></span></span>
+          <span>🔖 <span id="modalCollects"></span></span>
+          <span>📍 <span id="modalLocation"></span></span>
+          <span>🕒 <span id="modalTime"></span></span>
+        </div>
       </div>
     </div>
   </div>
@@ -93,7 +229,6 @@
     let currentData = [];
     let guestCookies = null;
 
-    // 获取游客 cookies（仅用于 /note/info）
     async function getGuestCookies() {
       if (guestCookies) return guestCookies;
       const res = await fetch('/guestcookies');
@@ -101,10 +236,8 @@
       if (data.success === 200) {
         guestCookies = data.data;
         return guestCookies;
-      } else {
-        console.warn('游客 cookies 获取失败，将尝试使用空值');
-        return "";
       }
+      return "";
     }
 
     async function searchNotes() {
@@ -124,6 +257,12 @@
         return;
       }
 
+      // 显示加载状态
+      document.getElementById('searchText').textContent = '搜索中...';
+      document.getElementById('searchSpinner').classList.remove('hidden');
+      document.getElementById('searchBtn').disabled = true;
+
+      const start = Date.now();
       try {
         const params = new URLSearchParams({
           query: keyword,
@@ -143,15 +282,31 @@
         }
 
         currentData = data.data.filter(item => item.model_type === 'note');
-        renderResults(currentData, keyword);
+        renderResults(currentData, keyword, num, Date.now() - start);
       } catch (e) {
         alert('搜索异常: ' + e.message);
+      } finally {
+        // 恢复按钮状态
+        document.getElementById('searchText').textContent = '🔍 开始监控';
+        document.getElementById('searchSpinner').classList.add('hidden');
+        document.getElementById('searchBtn').disabled = false;
       }
     }
 
-    function renderResults(notes, keyword) {
+    function renderResults(notes, keyword, num, duration) {
       const container = document.getElementById('results');
-      container.innerHTML = `<h2 class="text-xl font-bold mb-4">共找到 ${notes.length} 篇笔记</h2>`;
+      const summary = document.getElementById('summary');
+
+      container.innerHTML = '';
+      if (notes.length === 0) {
+        container.innerHTML = '<div class="text-center py-8 text-gray-500">未找到相关笔记</div>';
+        summary.classList.add('hidden');
+        return;
+      }
+
+      // 显示摘要
+      summary.innerHTML = `关键词 "<strong>${keyword}</strong>" 共找到 <strong>${notes.length}</strong> 篇笔记（请求 ${num} 篇，耗时 ${(duration / 1000).toFixed(1)}s）`;
+      summary.classList.remove('hidden');
 
       notes.forEach(item => {
         const note = item.note_card;
@@ -159,17 +314,17 @@
         const stats = note.interact_info || {};
 
         const card = document.createElement('div');
-        card.className = 'bg-white p-4 rounded shadow border cursor-pointer hover:shadow-md';
+        card.className = 'bg-white p-4 rounded-lg shadow border border-gray-200 cursor-pointer hover:shadow-md transition-shadow';
         card.onclick = () => showNoteDetail(item.id, item.xsec_token);
         card.innerHTML = `
-          <div class="flex">
-            <img src="${user.avatar?.trim() || ''}" class="w-10 h-10 rounded-full mr-3" onerror="this.style.display='none'">
-            <div>
-              <div class="font-bold text-blue-600 text-sm">${user.nickname || '未知用户'}</div>
+          <div class="flex items-start">
+            <img src="${user.avatar?.trim() || ''}" class="w-10 h-10 rounded-full mr-3 flex-shrink-0" onerror="this.style.display='none'">
+            <div class="min-w-0">
+              <div class="font-bold text-blue-600 text-sm truncate">${user.nickname || '未知用户'}</div>
               <div class="text-xs text-gray-500">粉丝: ${user.fans || '0'}</div>
             </div>
           </div>
-          <h3 class="text-lg font-semibold mt-2">${highlightText(note.display_title || '无标题', keyword)}</h3>
+          <h3 class="text-base md:text-lg font-semibold mt-2 break-words">${highlightText(note.display_title || '无标题', keyword)}</h3>
           <div class="mt-2 flex text-sm text-gray-600">
             <span class="mr-4">👍 ${stats.liked_count || 0}</span>
             <span class="mr-4">💬 ${stats.comment_count || 0}</span>
@@ -195,11 +350,26 @@
       return timeStr;
     }
 
-    async function showNoteDetail(noteId, xsecToken) {
+    let currentNoteId = null;
+    let currentXsecToken = null;
+
+    function showNoteDetail(noteId, xsecToken) {
+      currentNoteId = noteId;
+      currentXsecToken = xsecToken;
+
+      document.getElementById('noteModal').style.display = 'block';
+      document.getElementById('modalLoading').classList.remove('hidden');
+      document.getElementById('modalError').classList.add('hidden');
+      document.getElementById('modalContent').classList.add('hidden');
+
+      attemptLoadNote(0);
+    }
+
+    async function attemptLoadNote(retryCount) {
+      const maxRetries = 1;
       try {
-        // 使用游客 cookies 获取详情
-        const cookies = await getGuestCookies();
-        const noteUrl = `https://www.xiaohongshu.com/explore/${noteId}?xsec_token=${xsecToken}&xsec_source=pc_search`;
+        let cookies = await getGuestCookies();
+        const noteUrl = `https://www.xiaohongshu.com/explore/${currentNoteId}?xsec_token=${currentXsecToken}&xsec_source=pc_search`;
         const url = `/note/info?url=${encodeURIComponent(noteUrl)}&cookies_str=${encodeURIComponent(cookies)}`;
         const res = await fetch(url);
         const data = await res.json();
@@ -209,52 +379,81 @@
         }
 
         const note = data.data.data.items[0].note_card;
+        const user = note.user || {};
+
+        // 填充内容
+        document.getElementById('modalUserAvatar').src = user.avatar?.trim() || '';
+        document.getElementById('modalUserName').innerText = user.nickname || '未知用户';
+        document.getElementById('modalUserFans').innerText = `粉丝: ${user.fans || '0'}`;
         document.getElementById('modalTitle').innerText = note.title || note.display_title || '无标题';
         document.getElementById('modalDesc').innerText = note.desc || '无正文';
         document.getElementById('modalLikes').innerText = note.interact_info?.liked_count || '0';
         document.getElementById('modalComments').innerText = note.interact_info?.comment_count || '0';
         document.getElementById('modalCollects').innerText = note.interact_info?.collected_count || '0';
         document.getElementById('modalLocation').innerText = note.ip_location || '未知';
-        document.getElementById('modalTime').innerText = note.time ? new Date(note.time).toLocaleString() : '未知';
+        document.getElementById('modalTime').innerText = note.time
+          ? new Date(note.time).toLocaleString('zh-CN')
+          : (note.corner_tag_info?.[0]?.text || '未知');
 
-        // 清空媒体区域
-        const imgContainer = document.getElementById('modalImages');
-        const videoContainer = document.getElementById('modalVideo');
-        imgContainer.innerHTML = '';
-        videoContainer.innerHTML = '';
+        // 清空并渲染媒体
+        const mediaContainer = document.getElementById('modalMedia');
+        mediaContainer.innerHTML = '';
 
-        // 渲染图片
         if (note.image_list && note.type !== 'video') {
-          note.image_list.slice(0, 6).forEach(img => {
+          const grid = document.createElement('div');
+          grid.className = 'media-grid';
+          note.image_list.slice(0, 12).forEach(img => {
             const url = img.info_list?.find(i => i.image_scene === 'WB_DFT')?.url;
             if (url) {
               const imgEl = document.createElement('img');
               imgEl.src = url;
-              imgEl.className = 'w-full rounded';
-              imgContainer.appendChild(imgEl);
+              grid.appendChild(imgEl);
             }
           });
+          mediaContainer.appendChild(grid);
         }
 
-        // 渲染视频
         if (note.video?.media?.stream?.h264?.[0]?.master_url) {
           const videoUrl = note.video.media.stream.h264[0].master_url;
-          videoContainer.innerHTML = `
-            <video controls class="w-full rounded">
-              <source src="${videoUrl}" type="video/mp4">
-              您的浏览器不支持视频播放。
-            </video>
-          `;
+          const videoEl = document.createElement('video');
+          videoEl.controls = true;
+          videoEl.className = 'w-full rounded-lg';
+          const source = document.createElement('source');
+          source.src = videoUrl;
+          source.type = 'video/mp4';
+          videoEl.appendChild(source);
+          mediaContainer.appendChild(videoEl);
         }
 
-        document.getElementById('noteModal').style.display = 'block';
+        // 显示内容
+        document.getElementById('modalLoading').classList.add('hidden');
+        document.getElementById('modalContent').classList.remove('hidden');
+
       } catch (e) {
-        alert('获取笔记详情失败: ' + e.message);
+        if (retryCount < maxRetries) {
+          // 重试前清除缓存
+          guestCookies = null;
+          setTimeout(() => attemptLoadNote(retryCount + 1), 500);
+        } else {
+          // 最终失败
+          document.getElementById('modalLoading').classList.add('hidden');
+          document.getElementById('modalErrorMsg').innerText = e.message;
+          document.getElementById('modalError').classList.remove('hidden');
+        }
       }
+    }
+
+    function retryLoadNote() {
+      document.getElementById('modalError').classList.add('hidden');
+      document.getElementById('modalLoading').classList.remove('hidden');
+      attemptLoadNote(0); // 从0开始重试（会清缓存）
     }
 
     function closeModal() {
       document.getElementById('noteModal').style.display = 'none';
+      // 可选：重置状态
+      currentNoteId = null;
+      currentXsecToken = null;
     }
 
     function exportCSV() {
@@ -286,15 +485,16 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `小红书监控_${new Date().toISOString().slice(0,10)}.csv`;
+      a.download = `小红书监控_${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     }
 
-    window.onclick = function(event) {
+    window.onclick = function (event) {
       const modal = document.getElementById('noteModal');
       if (event.target === modal) closeModal();
     }
   </script>
 </body>
+
 </html>

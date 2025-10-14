@@ -66,7 +66,7 @@ def get_guest_cookies():
         return {"success": 200, "data": _guest_cookies_cache["value"]}
     success, data = test_cookie_getter()
     _guest_cookies_cache["value"] = data
-    _guest_cookies_cache["expires_at"] = now + 86400  # 5分钟缓存
+    _guest_cookies_cache["expires_at"] = now + 300  # 5分钟缓存
     return {"success": success, "data": data}
 # ==============================
 # 🏠 主页相关接口
