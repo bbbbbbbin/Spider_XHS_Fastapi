@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>小红书舆论监控</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { brand: '#e94c33' } } } }
+  </script>
+  <style>
+    .highlight { background-color: #fffacd; font-weight: bold; }
+    .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+    .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 800px; max-height: 80vh; overflow-y: auto; }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div class="max-w-6xl mx-auto p-6">
+    <header class="mb-8 text-center">
+      <h1 class="text-3xl font-bold text-brand">小红书舆论监控看板</h1>
+      <p class="text-gray-600 mt-2">需提供有效用户 cookies 进行搜索，笔记详情可免登录查看</p>
+    </header>
+
+    <!-- 搜索区 -->
+    <div class="bg-white p-4 rounded-lg shadow mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
+          <label class="block text-sm font-medium">关键词</label>
+          <input id="keyword" type="text" placeholder="如：赵露思" class="mt-1 p-2 border rounded w-full" value="赵露思">
+        </div>
+        <div>
+          <label class="block text-sm font-medium">数量 (1-50)</label>
+          <input id="num" type="number" min="1" max="50" value="10" class="mt-1 p-2 border rounded w-full">
+        </div>
+        <div>
+          <label class="block text-sm font-medium">排序</label>
+          <select id="sort" class="mt-1 p-2 border rounded w-full">
+            <option value="0">综合排序</option>
+            <option value="1">最新发布</option>
+            <option value="2">最多点赞</option>
+            <option value="3">最多评论</option>
+            <option value="4">最多收藏</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium">时间范围</label>
+          <select id="time" class="mt-1 p-2 border rounded w-full">
+            <option value="0">不限</option>
+            <option value="1">一天内</option>
+            <option value="2">一周内</option>
+            <option value="3">半年内</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium">笔记类型</label>
+          <select id="type" class="mt-1 p-2 border rounded w-full">
+            <option value="0">不限</option>
+            <option value="1">视频笔记</option>
+            <option value="2">图文笔记</option>
+          </select>
+        </div>
+        <div class="lg:col-span-2">
+          <label class="block text-sm font-medium">Cookies（必需）</label>
+          <input id="cookies" type="text" placeholder="请填写你的小红书 cookies" class="mt-1 p-2 border rounded w-full">
+        </div>
+      </div>
+      <div class="mt-4 flex gap-2">
+        <button onclick="searchNotes()" class="bg-brand text-white px-4 py-2 rounded hover:bg-red-600">🔍 开始监控</button>
+        <button onclick="exportCSV()" class="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800">📤 导出 CSV</button>
+      </div>
+    </div>
+
+    <!-- 结果区 -->
+    <div id="results" class="space-y-4"></div>
+  </div>
+
+  <!-- 笔记详情弹窗 -->
+  <div id="noteModal" class="modal">
+    <div class="modal-content">
+      <span onclick="closeModal()" class="float-right cursor-pointer text-gray-500 text-xl">&times;</span>
+      <h2 id="modalTitle" class="text-2xl font-bold mt-2"></h2>
+      <p id="modalDesc" class="mt-3 text-gray-800 whitespace-pre-wrap"></p>
+      <div id="modalImages" class="mt-4 grid grid-cols-2 gap-2"></div>
+      <div id="modalVideo" class="mt-4"></div>
+      <div class="mt-4 text-sm text-gray-600">
+        <p>👍 <span id="modalLikes"></span> | 💬 <span id="modalComments"></span> | 🔖 <span id="modalCollects"></span></p>
+        <p class="mt-1">📍 <span id="modalLocation"></span> | 🕒 <span id="modalTime"></span></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentData = [];
+    let guestCookies = null;
+
+    // 获取游客 cookies（仅用于 /note/info）
+    async function getGuestCookies() {
+      if (guestCookies) return guestCookies;
+      const res = await fetch('/guestcookies');
+      const data = await res.json();
+      if (data.success === 200) {
+        guestCookies = data.data;
+        return guestCookies;
+      } else {
+        console.warn('游客 cookies 获取失败，将尝试使用空值');
+        return "";
+      }
+    }
+
+    async function searchNotes() {
+      const keyword = document.getElementById('keyword').value.trim();
+      const num = parseInt(document.getElementById('num').value) || 10;
+      const sort = parseInt(document.getElementById('sort').value);
+      const time = parseInt(document.getElementById('time').value);
+      const type = parseInt(document.getElementById('type').value);
+      const cookies = document.getElementById('cookies').value.trim();
+
+      if (!keyword) {
+        alert('请填写关键词');
+        return;
+      }
+      if (!cookies) {
+        alert('请填写有效的用户 cookies（搜索必需）');
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams({
+          query: keyword,
+          require_num: num,
+          sort_type_choice: sort,
+          note_time: time,
+          note_type: type,
+          cookies_str: cookies
+        });
+        const url = `/search/note/by-num?${params.toString()}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.success) {
+          alert('搜索失败: ' + data.msg);
+          return;
+        }
+
+        currentData = data.data.filter(item => item.model_type === 'note');
+        renderResults(currentData, keyword);
+      } catch (e) {
+        alert('搜索异常: ' + e.message);
+      }
+    }
+
+    function renderResults(notes, keyword) {
+      const container = document.getElementById('results');
+      container.innerHTML = `<h2 class="text-xl font-bold mb-4">共找到 ${notes.length} 篇笔记</h2>`;
+
+      notes.forEach(item => {
+        const note = item.note_card;
+        const user = note.user || {};
+        const stats = note.interact_info || {};
+
+        const card = document.createElement('div');
+        card.className = 'bg-white p-4 rounded shadow border cursor-pointer hover:shadow-md';
+        card.onclick = () => showNoteDetail(item.id, item.xsec_token);
+        card.innerHTML = `
+          <div class="flex">
+            <img src="${user.avatar?.trim() || ''}" class="w-10 h-10 rounded-full mr-3" onerror="this.style.display='none'">
+            <div>
+              <div class="font-bold text-blue-600 text-sm">${user.nickname || '未知用户'}</div>
+              <div class="text-xs text-gray-500">粉丝: ${user.fans || '0'}</div>
+            </div>
+          </div>
+          <h3 class="text-lg font-semibold mt-2">${highlightText(note.display_title || '无标题', keyword)}</h3>
+          <div class="mt-2 flex text-sm text-gray-600">
+            <span class="mr-4">👍 ${stats.liked_count || 0}</span>
+            <span class="mr-4">💬 ${stats.comment_count || 0}</span>
+            <span>🔖 ${stats.collected_count || 0}</span>
+          </div>
+          <div class="mt-1 text-xs text-gray-500">发布时间: ${formatTime(note.corner_tag_info?.[0]?.text)}</div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function highlightText(text, kw) {
+      if (!kw) return text;
+      const regex = new RegExp(`(${kw})`, 'gi');
+      return text.replace(regex, '<span class="highlight">$1</span>');
+    }
+
+    function formatTime(timeStr) {
+      if (!timeStr) return '未知';
+      if (timeStr.includes('小时前') || timeStr.includes('分钟前')) return timeStr;
+      if (timeStr.match(/^\d{1,2}-\d{1,2}$/)) return `2025-${timeStr}`;
+      if (timeStr.match(/^\d{4}-\d{2}-\d{2}$/)) return timeStr;
+      return timeStr;
+    }
+
+    async function showNoteDetail(noteId, xsecToken) {
+      try {
+        // 使用游客 cookies 获取详情
+        const cookies = await getGuestCookies();
+        const noteUrl = `https://www.xiaohongshu.com/explore/${noteId}?xsec_token=${xsecToken}&xsec_source=pc_search`;
+        const url = `/note/info?url=${encodeURIComponent(noteUrl)}&cookies_str=${encodeURIComponent(cookies)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.success || !data.data?.data?.items?.[0]) {
+          throw new Error(data.msg || '笔记详情为空');
+        }
+
+        const note = data.data.data.items[0].note_card;
+        document.getElementById('modalTitle').innerText = note.title || note.display_title || '无标题';
+        document.getElementById('modalDesc').innerText = note.desc || '无正文';
+        document.getElementById('modalLikes').innerText = note.interact_info?.liked_count || '0';
+        document.getElementById('modalComments').innerText = note.interact_info?.comment_count || '0';
+        document.getElementById('modalCollects').innerText = note.interact_info?.collected_count || '0';
+        document.getElementById('modalLocation').innerText = note.ip_location || '未知';
+        document.getElementById('modalTime').innerText = note.time ? new Date(note.time).toLocaleString() : '未知';
+
+        // 清空媒体区域
+        const imgContainer = document.getElementById('modalImages');
+        const videoContainer = document.getElementById('modalVideo');
+        imgContainer.innerHTML = '';
+        videoContainer.innerHTML = '';
+
+        // 渲染图片
+        if (note.image_list && note.type !== 'video') {
+          note.image_list.slice(0, 6).forEach(img => {
+            const url = img.info_list?.find(i => i.image_scene === 'WB_DFT')?.url;
+            if (url) {
+              const imgEl = document.createElement('img');
+              imgEl.src = url;
+              imgEl.className = 'w-full rounded';
+              imgContainer.appendChild(imgEl);
+            }
+          });
+        }
+
+        // 渲染视频
+        if (note.video?.media?.stream?.h264?.[0]?.master_url) {
+          const videoUrl = note.video.media.stream.h264[0].master_url;
+          videoContainer.innerHTML = `
+            <video controls class="w-full rounded">
+              <source src="${videoUrl}" type="video/mp4">
+              您的浏览器不支持视频播放。
+            </video>
+          `;
+        }
+
+        document.getElementById('noteModal').style.display = 'block';
+      } catch (e) {
+        alert('获取笔记详情失败: ' + e.message);
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('noteModal').style.display = 'none';
+    }
+
+    function exportCSV() {
+      if (currentData.length === 0) {
+        alert('暂无数据可导出');
+        return;
+      }
+
+      const headers = ['笔记ID', '标题', '作者', '粉丝数', '点赞', '评论', '收藏', '发布时间'];
+      const rows = currentData.map(item => {
+        const note = item.note_card;
+        const user = note.user || {};
+        const stats = note.interact_info || {};
+        const time = formatTime(note.corner_tag_info?.[0]?.text);
+        return [
+          item.id,
+          `"${(note.display_title || '').replace(/"/g, '""')}"`,
+          user.nickname || '',
+          user.fans || 0,
+          stats.liked_count || 0,
+          stats.comment_count || 0,
+          stats.collected_count || 0,
+          time
+        ].join(',');
+      });
+
+      const csvContent = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob(['\ufeff', csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `小红书监控_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    window.onclick = function(event) {
+      const modal = document.getElementById('noteModal');
+      if (event.target === modal) closeModal();
+    }
+  </script>
+</body>
+</html>

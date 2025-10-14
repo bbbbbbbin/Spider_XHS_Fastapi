@@ -122,11 +122,11 @@ python main.py
 
 
 ## 📈 Star 趋势
-<a href="https://www.star-history.com/#cv-cat/Spider_XHS&Date">
+<a href="https://www.star-history.com/#bbbbbbbin/Spider_XHS_Fastapi&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=cv-cat/Spider_XHS&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=cv-cat/Spider_XHS&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=cv-cat/Spider_XHS&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=bbbbbbbin/Spider_XHS_Fastapi&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=bbbbbbbin/Spider_XHS_Fastapi&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=bbbbbbbin/Spider_XHS_Fastapi&type=Date" />
  </picture>
 </a>
 
