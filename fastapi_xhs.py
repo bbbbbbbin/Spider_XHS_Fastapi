@@ -3,11 +3,15 @@ from typing import Optional
 import json
 import time
 import os
+import requests
 from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
 from apis.playwright_cookies import test_cookie_getter
 from apis.xhs_pc_apis import XHS_Apis
+from fastapi.responses import Response
+from fastapi.responses import StreamingResponse
+from fastapi import Request
 
 # ==============================
 # 🚀 应用初始化
@@ -46,6 +50,60 @@ def parse_proxies(proxies_str: Optional[str]) -> Optional[dict]:
     except json.JSONDecodeError:
         return {"error": "代理配置格式错误，应为JSON字符串"}
 
+@app.get("/proxy/image", summary="🖼️ 代理小红书图片（绕过 403）")
+def proxy_image(url: str = Query(..., description="原始图片 URL")):
+    """代理图片请求，添加合法 headers 绕过反爬"""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://www.xiaohongshu.com/",
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            return Response(content=resp.content, media_type="image/jpeg")
+    except:
+        pass
+    return {"success": False, "msg": "Proxy failed"}
+
+@app.get("/proxy/video", summary="🎥 代理小红书视频（支持拖拽）")
+async def proxy_video(request: Request, url: str = Query(..., description="原始视频 URL")):
+    """支持 Range 请求的视频代理，解决 403 和无法拖拽问题"""
+    try:
+        # 获取客户端 Range 头（用于拖拽）
+        range_header = request.headers.get("range")
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://www.xiaohongshu.com/",
+        }
+        if range_header:
+            headers["Range"] = range_header
+
+        # 发起流式请求（stream=True）
+        resp = requests.get(url, headers=headers, stream=True, timeout=10)
+
+        # 构建响应头
+        response_headers = {
+            "Content-Type": "video/mp4",
+            "Accept-Ranges": "bytes",
+        }
+        if "Content-Length" in resp.headers:
+            response_headers["Content-Length"] = resp.headers["Content-Length"]
+        if "Content-Range" in resp.headers:
+            response_headers["Content-Range"] = resp.headers["Content-Range"]
+
+        # 状态码：206（部分）或 200（完整）
+        status_code = 206 if range_header and resp.status_code == 206 else 200
+
+        # ✅ 正确返回流式响应
+        return StreamingResponse(
+            resp.iter_content(chunk_size=8192),
+            media_type="video/mp4",
+            status_code=status_code,
+            headers=response_headers
+        )
+    except Exception as e:
+        return {"success": False, "msg": f"视频代理异常: {str(e)}"}
+
 # ==============================
 # 🎫 游客 Cookies 接口（带缓存）
 # ==============================
@@ -67,6 +125,19 @@ def get_guest_cookies():
     success, data = test_cookie_getter()
     _guest_cookies_cache["value"] = data
     _guest_cookies_cache["expires_at"] = now + 300  # 5分钟缓存
+    return {"success": success, "data": data}
+
+@app.get("/guestcookies/refresh", summary="🔄 强制刷新游客 cookies")
+def refresh_guest_cookies():
+    """强制清除缓存并重新获取游客 cookies"""
+    global _guest_cookies_cache
+    _guest_cookies_cache["value"] = ""
+    _guest_cookies_cache["expires_at"] = 0
+    # 立即重新获取
+    success, data = test_cookie_getter()
+    now = time.time()
+    _guest_cookies_cache["value"] = data
+    _guest_cookies_cache["expires_at"] = now + 300
     return {"success": success, "data": data}
 # ==============================
 # 🏠 主页相关接口
@@ -286,7 +357,7 @@ def user_collections_page(
 )
 def note_info(
     url: str = Query(..., description="笔记完整 URL，含 xsec_token"),
-    cookies_str: str = Query(..., description="用户的 cookies 字符串"),
+    cookies_str: Optional[str] = Query(..., description="用户的 cookies 字符串"),
     proxies: Optional[str] = Query(None, description="代理配置，JSON 字符串")
 ):
     proxies_dict = parse_proxies(proxies)

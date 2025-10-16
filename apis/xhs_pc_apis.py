@@ -376,7 +376,7 @@ class XHS_Apis():
                 "extra": {
                     "need_body_topic": "1"
                 },
-                "xsec_source": kvDist['xsec_source'] if 'xsec_source' in kvDist else "pc_search",
+                "xsec_source": kvDist['xsec_source'] if 'xsec_source' in kvDist else "pc_feed",
                 "xsec_token": kvDist['xsec_token']
             }
             headers, cookies, data = generate_request_params(cookies_str, api, data)

@@ -18,7 +18,7 @@ class XHSCookieGetter:
         self.headless = headless
         self.timeout = timeout
         
-    def get_guest_cookies(self, wait_time: int = 5, retry_count: int = 3):
+    def get_guest_cookies(self, wait_time: int = 3, retry_count: int = 3):
         """
         获取小红书游客cookies
         :param wait_time: 等待页面加载时间(秒)
@@ -156,7 +156,7 @@ class XHSCookieGetter:
                     input("完成操作后按回车键继续获取cookies...")
                 else:
                     logger.info("⏳ 等待页面自动加载...")
-                    time.sleep(5)
+                    time.sleep(1)
                 
                 # 获取cookies
                 cookies = context.cookies()
