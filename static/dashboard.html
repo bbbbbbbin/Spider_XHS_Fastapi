@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -27,13 +26,8 @@
     }
 
     @keyframes spin {
-      0% {
-        transform: rotate(0deg);
-      }
-
-      100% {
-        transform: rotate(360deg);
-      }
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
 
     .media-grid {
@@ -48,13 +42,13 @@
       height: auto;
       border-radius: 4px;
       object-fit: contain;
+      cursor: pointer;
     }
 
     .video-wrapper {
       position: relative;
       width: 100%;
-      padding-top: 56.25%;
-      /* 16:9 */
+      padding-top: 56.25%; /* 16:9 */
       margin-top: 12px;
       background: #000;
       border-radius: 8px;
@@ -70,7 +64,7 @@
       object-fit: contain;
     }
 
-    /* 🖼️ 图片预览弹窗 */
+    /* Lightbox */
     .lightbox {
       display: none;
       position: fixed;
@@ -80,7 +74,6 @@
       width: 100%;
       height: 100%;
       background-color: rgba(0, 0, 0, 0.9);
-      overflow: hidden;
     }
 
     .lightbox-content {
@@ -131,7 +124,6 @@
     }
   </style>
 </head>
-
 <body class="bg-gray-50">
   <div class="max-w-6xl mx-auto p-4 md:p-6">
     <header class="mb-6 text-center">
@@ -191,24 +183,21 @@
       </div>
 
       <div class="flex flex-wrap gap-2">
-        <button id="searchBtn" onclick="searchNotes()"
-          class="bg-brand text-white px-4 py-2 rounded hover:bg-red-600 flex items-center">
+        <button id="searchBtn" onclick="searchNotes()" class="bg-brand text-white px-4 py-2 rounded hover:bg-red-600 flex items-center">
           <span id="searchText">🔍 开始监控</span>
-          <span id="searchSpinner" class="ml-2 hidden">
-            <div class="spinner"></div>
-          </span>
+          <span id="searchSpinner" class="ml-2 hidden"><div class="spinner"></div></span>
         </button>
-        <button id="expandAllBtn" onclick="toggleExpandAll()"
-          class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 hidden">📖 一键展开详情</button>
-        <button onclick="exportExcel()" class="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800">📤 导出
-          Excel</button>
+        <button id="expandAllBtn" onclick="toggleExpandAll()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 hidden">📥 预加载详情</button>
+        <button onclick="exportExcel()" class="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800">📤 导出 Excel</button>
       </div>
     </div>
 
     <div id="summary" class="text-sm text-gray-600 mb-4 hidden"></div>
-    <div id="results" class="space-y-4"></div>
+    <div id="pagination" class="mt-4 flex justify-center gap-2"></div>
+    <div id="results" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
   </div>
-  <!-- 🖼️ 图片预览弹窗 -->
+
+  <!-- Lightbox -->
   <div id="lightbox" class="lightbox" onclick="closeLightbox(event)">
     <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
     <div class="lightbox-content">
@@ -225,36 +214,34 @@
     let guestCookies = null;
     let abortExpandAll = false;
     let isExpanding = false;
+    let currentPage = 1;
+    const PAGE_SIZE = 10;
     let currentImageUrls = [];
     let currentImageIndex = 0;
 
+    // ========== Lightbox ==========
     function openLightbox(urls, index) {
       currentImageUrls = urls;
       currentImageIndex = index;
       document.getElementById('lightbox-img').src = urls[index];
       document.getElementById('lightbox').style.display = 'block';
-      document.body.style.overflow = 'hidden'; // 防止背景滚动
+      document.body.style.overflow = 'hidden';
     }
-
     function closeLightbox(e) {
-      if (e && e.target.id !== 'lightbox') return; // 点击图片不关闭
+      if (e && e.target.id !== 'lightbox') return;
       document.getElementById('lightbox').style.display = 'none';
-      document.body.style.overflow = ''; // 恢复滚动
+      document.body.style.overflow = '';
     }
-
     function prevImage() {
       if (currentImageUrls.length <= 1) return;
       currentImageIndex = (currentImageIndex - 1 + currentImageUrls.length) % currentImageUrls.length;
       document.getElementById('lightbox-img').src = currentImageUrls[currentImageIndex];
     }
-
     function nextImage() {
       if (currentImageUrls.length <= 1) return;
       currentImageIndex = (currentImageIndex + 1) % currentImageUrls.length;
       document.getElementById('lightbox-img').src = currentImageUrls[currentImageIndex];
     }
-
-    // 键盘支持
     document.addEventListener('keydown', (e) => {
       if (document.getElementById('lightbox').style.display === 'block') {
         if (e.key === 'Escape') closeLightbox();
@@ -263,6 +250,7 @@
       }
     });
 
+    // ========== Utils ==========
     async function getGuestCookies(forceRefresh = false) {
       if (!forceRefresh && guestCookies) return guestCookies;
       const url = forceRefresh ? '/guestcookies/refresh' : '/guestcookies';
@@ -275,6 +263,40 @@
       return "";
     }
 
+    function highlightText(text, kw) {
+      if (!kw) return text;
+      return text.replace(new RegExp(`(${kw})`, 'gi'), '<span class="highlight">$1</span>');
+    }
+
+    function formatTime(timeStr) {
+      if (!timeStr) return '未知';
+      if (timeStr.includes('小时前') || timeStr.includes('分钟前')) return timeStr;
+      if (/^\d{1,2}-\d{1,2}$/.test(timeStr)) return `2025-${timeStr}`;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(timeStr)) return timeStr;
+      return timeStr;
+    }
+
+    // ========== Extract Detail ==========
+    function extractDetail(note) {
+      const mediaUrls = note.image_list?.map(img =>
+        img.info_list?.find(i => i.image_scene === 'WB_DFT')?.url
+      ).filter(Boolean) || [];
+      let videoUrl = '';
+      if (note.video?.media?.stream) {
+        if (note.video.media.stream.h265?.[0]?.master_url) {
+          videoUrl = note.video.media.stream.h265[0].master_url;
+        } else if (note.video.media.stream.h264?.[0]?.master_url) {
+          videoUrl = note.video.media.stream.h264[0].master_url;
+        }
+      }
+      return {
+        desc: note.desc || '',
+        mediaUrls,
+        videoUrl
+      };
+    }
+
+    // ========== Search ==========
     async function searchNotes() {
       const keyword = document.getElementById('keyword').value.trim();
       const num = parseInt(document.getElementById('num').value) || 10;
@@ -309,7 +331,8 @@
         if (!data.success) throw new Error(data.msg);
 
         currentData = data.data.filter(item => item.model_type === 'note');
-        renderResults(currentData, keyword, num);
+        currentPage = 1;
+        renderPage();
         if (currentData.length > 0) {
           document.getElementById('expandAllBtn').classList.remove('hidden');
         }
@@ -322,27 +345,28 @@
       }
     }
 
-    function renderResults(notes, keyword, num) {
+    // ========== Pagination ==========
+    function renderPage() {
       const container = document.getElementById('results');
-      const summary = document.getElementById('summary');
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const end = Math.min(start + PAGE_SIZE, currentData.length);
+      const pageNotes = currentData.slice(start, end);
+
       container.innerHTML = '';
-      if (notes.length === 0) {
-        container.innerHTML = '<div class="text-center py-8 text-gray-500">未找到相关笔记</div>';
-        summary.classList.add('hidden');
+      if (pageNotes.length === 0) {
+        container.innerHTML = '<div class="text-center py-8 text-gray-500">暂无数据</div>';
+        renderPagination();
         return;
       }
 
-      summary.innerHTML = `关键词 "<strong>${keyword}</strong>" 共找到 <strong>${notes.length}</strong> 篇笔记（请求 ${num} 篇）`;
-      summary.classList.remove('hidden');
-
-      notes.forEach((item, index) => {
+      pageNotes.forEach((item, idx) => {
         const note = item.note_card;
         const user = note.user || {};
         const stats = note.interact_info || {};
 
         const card = document.createElement('div');
-        card.className = 'bg-white p-4 rounded-lg shadow border border-gray-200';
-
+        card.className = 'bg-white p-4 rounded-lg shadow border border-gray-200 cursor-pointer hover:shadow-md';
+        card.onclick = () => showNoteDetail(start + idx);
         card.innerHTML = `
           <div class="flex items-start">
             <img src="${user.avatar?.trim() || ''}" class="w-10 h-10 rounded-full mr-3 flex-shrink-0" onerror="this.style.display='none'">
@@ -350,143 +374,161 @@
               <div class="font-bold text-blue-600 text-sm">${user.nickname || '未知用户'}</div>
             </div>
           </div>
-          <h3 class="text-base md:text-lg font-semibold mt-2 break-words">${highlightText(note.display_title || '无标题', keyword)}</h3>
+          <h3 class="text-base md:text-lg font-semibold mt-2 break-words">${highlightText(note.display_title || '无标题', '')}</h3>
           <div class="mt-2 flex text-sm text-gray-600">
             <span class="mr-4">👍 ${stats.liked_count || 0}</span>
             <span class="mr-4">💬 ${stats.comment_count || 0}</span>
             <span>🔖 ${stats.collected_count || 0}</span>
           </div>
           <div class="mt-1 text-xs text-gray-500">发布时间: ${formatTime(note.corner_tag_info?.[0]?.text)}</div>
-          <div class="mt-3">
-            <button onclick="loadNoteDetail(${index})" class="text-sm text-brand underline">查看全文</button>
-            <div id="detail-${index}" class="mt-3 hidden"></div>
-          </div>
         `;
         container.appendChild(card);
       });
+
+      renderPagination();
     }
 
-    // ==============================
-    // 📌 核心修正：loadNoteDetailOnce
-    // ==============================
-    async function loadNoteDetailOnce(index) {
+    function renderPagination() {
+      const totalPages = Math.ceil(currentData.length / PAGE_SIZE);
+      const pagination = document.getElementById('pagination');
+      if (!pagination) return;
+
+      let html = `<div class="flex justify-center gap-2 mt-4">`;
+      if (currentPage > 1) {
+        html += `<button onclick="goToPage(${currentPage - 1})" class="px-3 py-1 bg-gray-200 rounded">上一页</button>`;
+      }
+      html += `<span class="px-3 py-1">第 ${currentPage} / ${totalPages} 页</span>`;
+      if (currentPage < totalPages) {
+        html += `<button onclick="goToPage(${currentPage + 1})" class="px-3 py-1 bg-gray-200 rounded">下一页</button>`;
+      }
+      html += `</div>`;
+      pagination.innerHTML = html;
+    }
+
+    function goToPage(page) {
+      currentPage = page;
+      renderPage();
+    }
+
+    // ========== Detail Modal ==========
+    async function showNoteDetail(index) {
       const item = currentData[index];
-      const detailEl = document.getElementById(`detail-${index}`);
-      detailEl.innerHTML = '<div class="text-center"><div class="spinner"></div></div>';
-      detailEl.classList.remove('hidden');
+      const note = item.note_card;
 
-      const cookies = await getGuestCookies();
-      // 🔧 修复 URL 空格
-      const noteUrl = `https://www.xiaohongshu.com/explore/${item.id}?xsec_token=${item.xsec_token}&xsec_source=pc_search`;
-      const url = `/note/info?url=${encodeURIComponent(noteUrl)}&cookies_str=${encodeURIComponent(cookies)}`;
-      const res = await fetch(url);
-      const data = await res.json();
-
-      const innerData = data.data;
-      if (!innerData || !innerData.success || !innerData.data?.items?.[0]) {
-        throw new Error('详情加载失败');
+      if (item._detail) {
+        renderNoteModal(index, item._detail, note);
+        return;
       }
 
-      const note = innerData.data.items[0].note_card;
-      let mediaHtml = '';
-
-      // 🖼️ 图片：直接使用 WB_DFT 原图（避免 403）
-      if (note.image_list && note.type !== 'video') {
-        const urls = note.image_list
-          .map(img => img.info_list?.find(i => i.image_scene === 'WB_DFT')?.url)
-          .filter(Boolean);
-        if (urls.length > 0) {
-          mediaHtml = `
-              <div class="media-grid" data-urls='${JSON.stringify(urls).replace(/'/g, "&#39;")}'>
-                ${urls.map((url, idx) =>
-            `<img 
-                    src="/proxy/image?url=${encodeURIComponent(url)}" 
-                    class="lightbox-trigger w-full h-auto rounded cursor-pointer" 
-                    loading="lazy"
-                    data-index="${idx}"
-                  >`
-          ).join('')}
-              </div>
-            `;
-        }
+      // 渲染加载中状态
+      renderNoteModal(index, { desc: '', mediaUrls: [], videoUrl: '' }, note);
+      const contentEl = document.getElementById('modalContent');
+      if (contentEl) {
+        contentEl.innerHTML = '<div class="text-center py-4"><div class="spinner"></div><p class="mt-2">加载中...</p></div>';
       }
 
-      // 🎥 视频：直接从 note.video 提取 master_url
-      if (note.type === 'video' && note.video?.media?.stream) {
-        let videoUrl = '';
-        // 优先 h264（兼容性好）
-        if (note.video.media.stream.h265?.[0]?.master_url) {
-          videoUrl = note.video.media.stream.h265[0].master_url;
-        } else if (note.video.media.stream.h264?.[0]?.master_url) {
-          videoUrl = note.video.media.stream.h264[0].master_url;
+      try {
+        const cookies = await getGuestCookies();
+        const noteUrl = `https://www.xiaohongshu.com/explore/${item.id}?xsec_token=${item.xsec_token}&xsec_source=pc_search`;
+        const url = `/note/info?url=${encodeURIComponent(noteUrl)}&cookies_str=${encodeURIComponent(cookies)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        const innerData = data.data;
+        if (!innerData || !innerData.success || !innerData.data?.items?.[0]) {
+          throw new Error('详情加载失败');
         }
 
-        // 在 loadNoteDetailOnce 中
-        if (videoUrl) {
-          const proxyVideoUrl = `/proxy/video?url=${encodeURIComponent(videoUrl)}`;
-          mediaHtml = `
-            <div class="video-wrapper mt-3">
-              <video controls class="w-full h-full">
-                <source src="${proxyVideoUrl}" type="video/mp4">
-              </video>
+        const fullNote = innerData.data.items[0].note_card;
+        const detail = extractDetail(fullNote);
+        currentData[index]._detail = detail;
+        renderNoteModal(index, detail, note);
+      } catch (e) {
+        const contentEl = document.getElementById('modalContent');
+        if (contentEl) {
+          contentEl.innerHTML = `
+            <div class="p-4 text-center text-red-500">
+              <p>加载失败: ${e.message}</p>
+              <button onclick="retryLoadDetail(${index})" class="mt-2 text-blue-500 underline">🔄 刷新</button>
             </div>
           `;
-        } else {
-          mediaHtml = `<p class="text-gray-500 text-sm">视频链接未找到</p>`;
-        }
-      }
-
-      detailEl.innerHTML = `
-    <p class="text-gray-800 whitespace-pre-wrap">${note.desc || '无正文'}</p>
-    ${mediaHtml}
-  `;
-
-      // 保存详情（用于导出）
-      currentData[index]._detail = {
-        desc: note.desc || '',
-        media_urls: note.image_list?.map(img =>
-          img.info_list?.find(i => i.image_scene === 'WB_DFT')?.url
-        ).filter(Boolean) || [],
-        video_url: note.video?.media?.stream?.h264?.[0]?.master_url ||
-          note.video?.media?.stream?.h265?.[0]?.master_url || ''
-      };
-    }
-
-    async function loadNoteDetailWithRetry(index, maxRetries = 1) {
-      let retryCount = 0;
-      while (retryCount <= maxRetries) {
-        try {
-          await loadNoteDetailOnce(index);
-          return;
-        } catch (e) {
-          retryCount++;
-          if (retryCount <= maxRetries) {
-            guestCookies = null;
-            await getGuestCookies(true);
-            await new Promise(r => setTimeout(r, 500));
-          } else {
-            throw e;
-          }
         }
       }
     }
 
-    function loadNoteDetail(index) {
-      // 🔧 确保调用带重试的版本
-      loadNoteDetailWithRetry(index, 1).catch(e => {
-        const el = document.getElementById(`detail-${index}`);
-        if (el) el.innerHTML = `<p class="text-red-500 text-sm">加载详情失败: ${e.message}</p>`;
-      });
+    function renderNoteModal(index, detail, note) {
+      // 确保 modal 存在
+      let modal = document.getElementById('noteModal');
+      if (!modal) {
+        document.body.insertAdjacentHTML('beforeend', `
+          <div id="noteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto relative">
+              <button onclick="closeDetailModal()" class="absolute top-2 right-2 text-gray-500 hover:text-gray-800">&times;</button>
+              <div id="modalContent" class="p-6"></div>
+            </div>
+          </div>
+        `);
+      }
+
+      const contentEl = document.getElementById('modalContent');
+      if (!contentEl) return;
+
+      const user = note.user || {};
+      const stats = note.interact_info || {};
+
+      const mediaUrls = detail.mediaUrls || [];
+      const videoUrl = detail.videoUrl || '';
+
+      let mediaHtml = '';
+      if (mediaUrls.length > 0) {
+        mediaHtml += `<div class="media-grid mt-3">${mediaUrls.map(url =>
+          `<img src="/proxy/image?url=${encodeURIComponent(url)}" class="w-full h-auto rounded">`
+        ).join('')}</div>`;
+      }
+      if (videoUrl) {
+        const proxyVideoUrl = `/proxy/video?url=${encodeURIComponent(videoUrl)}`;
+        mediaHtml += `
+          <div class="video-wrapper mt-3">
+            <video controls class="w-full h-full">
+              <source src="${proxyVideoUrl}" type="video/mp4">
+            </video>
+          </div>
+        `;
+      }
+
+      contentEl.innerHTML = `
+        <div class="flex items-start mb-3">
+          <img src="${user.avatar?.trim() || ''}" class="w-10 h-10 rounded-full mr-3" onerror="this.style.display='none'">
+          <div>
+            <div class="font-bold">${user.nickname || '未知用户'}</div>
+            <div class="text-sm text-gray-600">👍 ${stats.liked_count} | 💬 ${stats.comment_count} | 🔖 ${stats.collected_count}</div>
+          </div>
+        </div>
+        <h2 class="text-xl font-bold mb-2">${note.display_title || '无标题'}</h2>
+        <p class="whitespace-pre-wrap">${detail.desc || ''}</p>
+        ${mediaHtml}
+        <div class="mt-4 text-center">
+          <button onclick="retryLoadDetail(${index})" class="text-sm text-blue-500 underline">🔄 刷新内容</button>
+        </div>
+      `;
     }
 
-    // ==============================
-    // 📌 一键展开逻辑（带停止）
-    // ==============================
+    function retryLoadDetail(index) {
+      delete currentData[index]._detail;
+      showNoteDetail(index);
+    }
+
+    function closeDetailModal() {
+      const modal = document.getElementById('noteModal');
+      if (modal) modal.remove();
+    }
+
+    // ========== Expand All ==========
     function toggleExpandAll() {
       if (isExpanding) {
         abortExpandAll = true;
         isExpanding = false;
-        document.getElementById('expandAllBtn').textContent = '📖 一键展开详情';
+        document.getElementById('expandAllBtn').textContent = '📥 预加载详情';
         document.getElementById('expandAllBtn').classList.remove('bg-red-600', 'text-white');
         document.getElementById('expandAllBtn').classList.add('bg-blue-600');
         document.getElementById('expandLoadingBanner')?.remove();
@@ -514,8 +556,7 @@
       let success = 0, fail = 0;
       for (let i = 0; i < total; i++) {
         if (abortExpandAll) break;
-        const el = document.getElementById(`detail-${i}`);
-        if (!el || el.querySelector('p, .media-grid, .video-wrapper')) {
+        if (currentData[i]._detail) {
           success++; updateProgress(success + fail, total); continue;
         }
         try {
@@ -528,7 +569,7 @@
         await new Promise(r => setTimeout(r, 800));
       }
       isExpanding = false;
-      document.getElementById('expandAllBtn').textContent = '📖 一键展开详情';
+      document.getElementById('expandAllBtn').textContent = '📥 预加载详情';
       document.getElementById('expandAllBtn').classList.remove('bg-red-600', 'text-white');
       document.getElementById('expandAllBtn').classList.add('bg-blue-600');
       document.getElementById('expandLoadingBanner')?.remove();
@@ -542,30 +583,82 @@
       if (el) el.textContent = `${current}/${total}`;
     }
 
-    function highlightText(text, kw) {
-      if (!kw) return text;
-      return text.replace(new RegExp(`(${kw})`, 'gi'), '<span class="highlight">$1</span>');
+    async function loadNoteDetailWithRetry(index, maxRetries = 1) {
+      let retryCount = 0;
+      while (retryCount <= maxRetries) {
+        try {
+          await loadNoteDetailOnce(index);
+          return;
+        } catch (e) {
+          retryCount++;
+          if (retryCount <= maxRetries) {
+            guestCookies = null;
+            await getGuestCookies(true);
+            await new Promise(r => setTimeout(r, 500));
+          } else {
+            throw e;
+          }
+        }
+      }
     }
 
-    function formatTime(timeStr) {
-      if (!timeStr) return '未知';
-      if (timeStr.includes('小时前') || timeStr.includes('分钟前')) return timeStr;
-      if (/^\d{1,2}-\d{1,2}$/.test(timeStr)) return `2025-${timeStr}`;
-      if (/^\d{4}-\d{2}-\d{2}$/.test(timeStr)) return timeStr;
-      return timeStr;
+    async function loadNoteDetailOnce(index) {
+      const item = currentData[index];
+      const cookies = await getGuestCookies();
+      const noteUrl = `https://www.xiaohongshu.com/explore/${item.id}?xsec_token=${item.xsec_token}&xsec_source=pc_search`;
+      const url = `/note/info?url=${encodeURIComponent(noteUrl)}&cookies_str=${encodeURIComponent(cookies)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      const innerData = data.data;
+      if (!innerData || !innerData.success || !innerData.data?.items?.[0]) {
+        throw new Error('详情加载失败');
+      }
+
+      const note = innerData.data.items[0].note_card;
+      currentData[index]._detail = extractDetail(note);
     }
 
-    function exportExcel() {
+    // ========== Export Excel ==========
+    async function exportExcel() {
       if (currentData.length === 0) {
         alert('暂无数据可导出');
         return;
       }
+
+      const unloadedIndices = currentData
+        .map((item, idx) => !item._detail ? idx : null)
+        .filter(idx => idx !== null);
+
+      if (unloadedIndices.length > 0) {
+        const shouldLoad = confirm(`有 ${unloadedIndices.length} 篇笔记未加载详情，是否自动加载后再导出？`);
+        if (shouldLoad) {
+          const originalText = document.getElementById('searchText')?.textContent || '导出中...';
+          document.getElementById('searchText') && (document.getElementById('searchText').textContent = '导出准备中...');
+          document.getElementById('searchSpinner')?.classList.remove('hidden');
+
+          try {
+            for (const idx of unloadedIndices) {
+              if (abortExpandAll) break;
+              await loadNoteDetailWithRetry(idx, 1);
+              await new Promise(r => setTimeout(r, 500));
+            }
+          } finally {
+            document.getElementById('searchText') && (document.getElementById('searchText').textContent = originalText);
+            document.getElementById('searchSpinner')?.classList.add('hidden');
+          }
+        }
+      }
+
       const rows = currentData.map(item => {
         const note = item.note_card;
         const user = note.user || {};
         const stats = note.interact_info || {};
         const detail = item._detail || {};
-        const media = [...(detail.media_urls || []), detail.video_url].filter(Boolean).join('; ');
+
+        const mediaUrls = [...(detail.mediaUrls || []), detail.videoUrl].filter(Boolean);
+        const mediaStr = mediaUrls.join('; ');
+
         return {
           "笔记ID": item.id,
           "标题": note.display_title || '',
@@ -575,30 +668,26 @@
           "评论数": stats.comment_count || 0,
           "收藏数": stats.collected_count || 0,
           "发布时间": formatTime(note.corner_tag_info?.[0]?.text),
-          "媒体链接": media
+          "媒体链接": mediaStr
         };
       });
+
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "小红书监控");
       XLSX.writeFile(wb, `小红书监控_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
 
+    // ========== Lightbox Trigger ==========
     document.addEventListener('click', function (e) {
-      if (e.target.classList.contains('lightbox-trigger')) {
+      if (e.target.tagName === 'IMG' && e.target.closest('.media-grid')) {
         const grid = e.target.closest('.media-grid');
-        if (!grid) return;
-        try {
-          const urls = JSON.parse(grid.dataset.urls);
-          const index = parseInt(e.target.dataset.index, 10);
-          openLightbox(urls, index);
-        } catch (err) {
-          console.error('解析图片URL失败', err);
-        }
+        const imgs = grid.querySelectorAll('img');
+        const urls = Array.from(imgs).map(img => img.src);
+        const index = Array.from(imgs).indexOf(e.target);
+        openLightbox(urls, index);
       }
     });
   </script>
-
 </body>
-
 </html>
